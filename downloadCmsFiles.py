@@ -1,33 +1,39 @@
+#!/usr/bin/env python3
+
 import json, re, subprocess, os
 from bs4 import BeautifulSoup
 from pathlib import Path
 
+homepath = str(Path.home())
+
+documents_path = homepath + "/Dokumente/Unterlagen/"
+books_path = homepath + "/Dokumente/Bücher/"
+
+cms_path = homepath + "/.cms"
+cmscookie_path = cms_path + "/cmsCookie.txt"
+cmsfiles_path = cms_path + "/.cmsfiles"
+cmsfiles = {}
+
+
 def cleanName(str):
-    return re.sub(r"[\./]", " ", str)
+    return re.sub(r'[\|\\\?\*<":>/\.]', " ", str)
 
 def cleanPath(str):
-    return re.sub(r"[/]", " ", str)
+    return re.sub(r'[\|\\\?\*<":>/]', " ", str)
 
 def cmsWget(location, link):
-    args = ['wget', '--tries=3', '--load-cookies', '/usr/local/bin/cmsCookie.txt', '-O', location, link]
+    args = ['wget', '--tries=3', '--load-cookies', cmscookie_path, '-O', location, link]
     subprocess.run(args)
 
 def wget(location, link):
     args = ['wget', '--tries=3', '-O', location, link]
     subprocess.run(args)
 
-documents_path = Path.home() + "/Dokumente/Unterlagen/"
-books_path = Path.home() + "/Dokumente/Bücher/"
-
-
-cmsfiles_path = Path.home() + "/.cmsfiles"
-cmsfiles = {}
-
 if os.path.exists(cmsfiles_path):
     with open(cmsfiles_path, 'r') as file:
         cmsfiles = json.load(file)
 
-coursesStr = subprocess.run(['wget', '--tries=3', '-O', '-', '-o', '/dev/null', '--load-cookies', '/usr/local/bin/cmsCookie.txt', 'https://cms.sic.saarland/system/courses'],stdout = subprocess.PIPE).stdout.decode("utf-8")
+coursesStr = subprocess.run(['wget', '--tries=3', '-O', '-', '-o', '/dev/null', '--load-cookies', cmscookie_path, 'https://cms.sic.saarland/system/courses'],stdout = subprocess.PIPE).stdout.decode("utf-8")
 
 soup = BeautifulSoup(coursesStr, 'html.parser')
 coursesSrc = soup.find_all("td", class_="td-name")
@@ -43,7 +49,7 @@ for course in courses:
     course_documents_path = documents_path + course[1] + "/"
     course_books_path = books_path + course[1] + "/"
     
-    courseStr = subprocess.run(['wget', '--tries=3', '-O', '-', '-o', '/dev/null', '--load-cookies', '/usr/local/bin/cmsCookie.txt', 'https://cms.sic.saarland/' + course[0] + '/materials'],stdout = subprocess.PIPE).stdout.decode("utf-8")
+    courseStr = subprocess.run(['wget', '--tries=3', '-O', '-', '-o', '/dev/null', '--load-cookies', cmscookie_path, 'https://cms.sic.saarland/' + course[0] + '/materials'],stdout = subprocess.PIPE).stdout.decode("utf-8")
     soup = BeautifulSoup(courseStr, 'html.parser')
     downloadsCategories = soup.find_all("div", class_="accordion-group")
 
@@ -76,15 +82,15 @@ for course in courses:
                     
                 if not linkTitle in cmsfiles[course[1]]['materials'][categoryTitle]['files']:
                     cmsfiles[course[1]]['materials'][categoryTitle]['files'][linkTitle] = {'rev' : -2, 'link' : link}
-
-                if rev <= cmsfiles[course[1]]['materials'][categoryTitle]['files'][linkTitle]['rev'] and os.path.exists(filepath):
-                    continue
-
+                
                 Path(dirpath).mkdir(parents=True, exist_ok=True)
+
                 if download.find('a', target=True) == None:
                     revColumn = download.find("td", class_="rev-column")
                     if revColumn != None:
                         rev = int(revColumn.text.lstrip().rstrip().removeprefix('rev').lstrip())
+                    if rev <= cmsfiles[course[1]]['materials'][categoryTitle]['files'][linkTitle]['rev'] and os.path.exists(filepath):
+                        continue
                     downloadLink = 'https://cms.sic.saarland' + link
                     cmsWget(filepath, downloadLink)
                 else:
